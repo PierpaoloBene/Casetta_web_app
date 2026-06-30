@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { Home, ExternalLink, Trash2, Plus, Download, Upload, Edit2, MapPin, Loader2, Save, X } from 'lucide-react';
+import { Home, ExternalLink, Trash2, Plus, Download, Upload, Edit2, MapPin, Loader2, Save, X, Phone, RefreshCw } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
+import { supabase } from './supabaseClient';
 
 // Fix for default marker icon in leaflet with React
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -16,25 +17,29 @@ L.Marker.prototype.options.icon = DefaultIcon;
 
 const MONZA_STATION = { lat: 45.5786, lon: 9.2747 };
 
+// Funzione matematica per calcolare la distanza in linea d'aria tra due coordinate (Formula di Haversine)
+function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Raggio della terra in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+    Math.sin(dLon / 2) * Math.sin(dLon / 2); 
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+  return R * c; // Ritorna distanza in km
+}
+
 function App() {
-  const [houses, setHouses] = useState(() => {
-    const saved = localStorage.getItem('casetta-tracker-data');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing localStorage data', e);
-        return [];
-      }
-    }
-    return [];
-  });
+  const [houses, setHouses] = useState([]);
+  const [isSyncing, setIsSyncing] = useState(true);
 
   const [formData, setFormData] = useState({
     link: '',
     price: '',
     address: '',
     agency: false,
+    toCall: false,
     appointment: '',
     notes: ''
   });
@@ -44,9 +49,56 @@ function App() {
 
   const fileInputRef = useRef(null);
 
+  // Load from Supabase on mount
   useEffect(() => {
-    localStorage.setItem('casetta-tracker-data', JSON.stringify(houses));
-  }, [houses]);
+    fetchHouses();
+
+    // Subscribe to real-time changes
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'houses' },
+        (payload) => {
+          console.log('Change received!', payload);
+          if (payload.eventType === 'INSERT') {
+            setHouses(prev => {
+              if (prev.find(h => h.id === payload.new.id)) return prev;
+              return [...prev, payload.new];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            setHouses(prev => prev.map(h => h.id === payload.new.id ? payload.new : h));
+          } else if (payload.eventType === 'DELETE') {
+            setHouses(prev => prev.filter(h => h.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchHouses = async () => {
+    setIsSyncing(true);
+    const { data, error } = await supabase
+      .from('houses')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('Error fetching houses:', error);
+      // Fallback to local storage if DB fails or table doesn't exist
+      const saved = localStorage.getItem('casetta-tracker-data');
+      if (saved) setHouses(JSON.parse(saved));
+    } else if (data) {
+      setHouses(data);
+      // Also save to local storage as backup
+      localStorage.setItem('casetta-tracker-data', JSON.stringify(data));
+    }
+    setIsSyncing(false);
+  };
 
   const handleExport = () => {
     const dataStr = JSON.stringify(houses, null, 2);
@@ -59,17 +111,24 @@ function App() {
     linkElement.click();
   };
 
-  const handleImport = (e) => {
+  const handleImport = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const importedHouses = JSON.parse(event.target.result);
         if (Array.isArray(importedHouses)) {
-          setHouses(importedHouses);
-          alert('Dati importati con successo!');
+          // Upload to Supabase
+          setIsSyncing(true);
+          const { error } = await supabase.from('houses').upsert(importedHouses);
+          if (error) {
+            alert('Errore durante il salvataggio sul cloud. Controlla che la tabella esista.');
+          } else {
+            alert('Dati importati con successo!');
+            fetchHouses();
+          }
         } else {
           alert('Il file non è nel formato corretto.');
         }
@@ -77,6 +136,7 @@ function App() {
         alert('Errore durante la lettura del file.');
       }
       e.target.value = null; // reset input
+      setIsSyncing(false);
     };
     reader.readAsText(file);
   };
@@ -104,24 +164,23 @@ function App() {
         return { lat: null, lon: null, distance: null, duration: null };
       }
 
-      const { lat, lon } = geocodeData[0];
+      const lat = parseFloat(geocodeData[0].lat);
+      const lon = parseFloat(geocodeData[0].lon);
 
-      // 2. Route with OSRM (Walking)
-      const routeRes = await fetch(`https://router.project-osrm.org/route/v1/foot/${lon},${lat};${MONZA_STATION.lon},${MONZA_STATION.lat}`);
-      const routeData = await routeRes.json();
+      // 2. Calcolo distanza in linea d'aria e minuti
+      const distanceKm = getDistanceFromLatLonInKm(lat, lon, MONZA_STATION.lat, MONZA_STATION.lon);
+      const distanceMeters = Math.round(distanceKm * 1000);
+      
+      // Velocità media di passeggiata: 75 metri al minuto
+      const durationMins = Math.round(distanceMeters / 75);
 
-      if (routeData.code === 'Ok' && routeData.routes.length > 0) {
-        const distanceMeters = routeData.routes[0].distance;
-        const durationSeconds = routeData.routes[0].duration;
-        return {
-          lat: parseFloat(lat),
-          lon: parseFloat(lon),
-          distance: distanceMeters,
-          duration: Math.round(durationSeconds / 60) // in minutes
-        };
-      }
+      return {
+        lat,
+        lon,
+        distance: distanceMeters,
+        duration: durationMins
+      };
 
-      return { lat: parseFloat(lat), lon: parseFloat(lon), distance: null, duration: null };
     } catch (err) {
       console.error("Error geocoding/routing:", err);
       return { lat: null, lon: null, distance: null, duration: null };
@@ -152,18 +211,31 @@ function App() {
     }
 
     if (editingId) {
-      setHouses(prev => prev.map(house => 
-        house.id === editingId ? { ...house, ...formData, ...locationData } : house
-      ));
+      const updatedHouse = { ...existingHouse, ...formData, ...locationData };
+      setHouses(prev => prev.map(house => house.id === editingId ? updatedHouse : house));
+      
+      // Update in Supabase
+      const { error } = await supabase.from('houses').update(updatedHouse).eq('id', editingId);
+      if (error) console.error("Error updating", error);
+      
       setEditingId(null);
     } else {
       const newHouse = {
         id: crypto.randomUUID(),
         ...formData,
         ...locationData,
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       };
       setHouses(prev => [...prev, newHouse]);
+      
+      // Insert in Supabase
+      const { error } = await supabase.from('houses').insert([newHouse]);
+      if (error) {
+        console.error("Error inserting", error);
+        alert("Salvataggio fallito sul cloud. I dati sono stati salvati solo localmente. Hai creato la tabella su Supabase?");
+        // fallback local storage
+        localStorage.setItem('casetta-tracker-data', JSON.stringify([...houses, newHouse]));
+      }
     }
     
     setFormData({
@@ -171,6 +243,7 @@ function App() {
       price: '',
       address: '',
       agency: false,
+      toCall: false,
       appointment: '',
       notes: ''
     });
@@ -183,6 +256,7 @@ function App() {
       price: house.price || '',
       address: house.address,
       agency: house.agency || false,
+      toCall: house.toCall || false,
       appointment: house.appointment || '',
       notes: house.notes || ''
     });
@@ -197,15 +271,19 @@ function App() {
       price: '',
       address: '',
       agency: false,
+      toCall: false,
       appointment: '',
       notes: ''
     });
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if(confirm('Sei sicuro di voler eliminare questa casa?')) {
       setHouses(prev => prev.filter(house => house.id !== id));
       if(editingId === id) cancelEdit();
+      
+      const { error } = await supabase.from('houses').delete().eq('id', id);
+      if (error) console.error("Error deleting", error);
     }
   };
 
@@ -228,6 +306,7 @@ function App() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1>Casetta Tracker</h1>
+            {isSyncing && <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}><RefreshCw size={12} className="animate-spin" /> Sincronizzazione in corso...</span>}
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button className="btn-outline" onClick={handleExport} title="Esporta Dati">
@@ -351,7 +430,16 @@ function App() {
                   checked={formData.agency} 
                   onChange={handleInputChange} 
                 />
-                <label htmlFor="agency">Tramite Agenzia?</label>
+                <label htmlFor="agency" style={{ marginRight: '1.5rem' }}>Tramite Agenzia?</label>
+
+                <input 
+                  type="checkbox" 
+                  id="toCall" 
+                  name="toCall" 
+                  checked={formData.toCall} 
+                  onChange={handleInputChange} 
+                />
+                <label htmlFor="toCall">Da chiamare?</label>
               </div>
             </div>
 
@@ -420,6 +508,14 @@ function App() {
                         <span className={`status-badge ${house.agency ? 'status-yes' : 'status-no'}`}>
                           {house.agency ? 'SÌ' : 'NO'}
                         </span>
+                        {house.toCall && (
+                          <div style={{ marginTop: '0.5rem' }}>
+                            <span className="status-badge" style={{ background: '#fef08a', color: '#854d0e', border: '1px solid #fde047', display: 'flex', alignItems: 'center', gap: '4px', width: 'fit-content' }}>
+                              <Phone size={12} />
+                              Da chiamare
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td>
                         {house.appointment ? new Date(house.appointment).toLocaleString('it-IT', { 
