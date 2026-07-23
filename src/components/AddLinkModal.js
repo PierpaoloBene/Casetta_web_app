@@ -79,7 +79,7 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
               <input name="title" className="glass-input" required value={itemData.title || ''} onChange={handleChange} />
             </div>
             
-            <div className="flex gap-4">
+            <div className="form-row">
               <div className="flex flex-col gap-2" style={{ flex: 1 }}>
                 <label>Prezzo (€)</label>
                 <input name="price" type="number" step="0.01" className="glass-input" value={itemData.price || ''} onChange={handleChange} />
@@ -90,7 +90,7 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
               </div>
             </div>
 
-            <div className="flex gap-4">
+            <div className="form-row">
               <div className="flex flex-col gap-2" style={{ flex: 1 }}>
                 <label>Categoria</label>
                 <input 
@@ -119,7 +119,7 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
               </div>
             </div>
 
-            <div className="flex gap-4">
+            <div className="form-row">
               <div className="flex flex-col gap-2" style={{ flex: 1 }}>
                 <label>Stanza</label>
                 <select name="room" className="glass-input" value={itemData.room || ''} onChange={handleChange}>

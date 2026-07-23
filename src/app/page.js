@@ -97,11 +97,11 @@ export default function Home() {
       
       {!showWelcome && (
         <div className="container" style={{ animation: 'fadeIn 0.5s ease-out' }}>
-          <header className="flex justify-between items-center mb-8" style={{ flexWrap: 'wrap', gap: '16px' }}>
+          <header className="header-container">
             <h1 style={{ color: 'var(--color-primary)', fontSize: '2rem' }}>Housing Helper</h1>
             
-            <div className="flex items-center gap-4" style={{ flexWrap: 'wrap' }}>
-              <select className="glass-input" style={{ width: 'auto', padding: '8px 16px' }} value={filterRoom} onChange={e => setFilterRoom(e.target.value)}>
+            <div className="header-controls">
+              <select className="glass-input" value={filterRoom} onChange={e => setFilterRoom(e.target.value)}>
                 <option value="">Tutte le stanze</option>
                 <option value="Soggiorno">Soggiorno</option>
                 <option value="Cucina">Cucina</option>
@@ -110,7 +110,7 @@ export default function Home() {
                 <option value="Corridoio">Corridoio</option>
               </select>
 
-              <select className="glass-input" style={{ width: 'auto', padding: '8px 16px' }} value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
+              <select className="glass-input" value={filterCategory} onChange={e => setFilterCategory(e.target.value)}>
                 <option value="">Tutte le categorie</option>
                 {existingCategories.map((cat, idx) => (
                   <option key={idx} value={cat}>{cat}</option>
@@ -123,7 +123,7 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="glass p-4 flex justify-between items-center" style={{ padding: '20px', flexWrap: 'wrap', gap: '16px', marginBottom: '40px' }}>
+          <div className="glass budget-box">
             <div>
               <p style={{ color: 'var(--color-text-light)', margin: 0, fontSize: '0.9rem' }}>Spesa Totale</p>
               <h2 style={{ margin: 0, fontSize: '1.8rem' }}>€{totalBudget.toFixed(2)}</h2>
