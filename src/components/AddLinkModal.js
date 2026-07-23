@@ -11,124 +11,18 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
     if (!url) return;
     setLoading(true);
     try {
-      // Tentativo 1: corsproxy.io (restituisce HTML diretto, spesso funziona meglio su Safari)
-      let html = '';
-      try {
-        const proxy1 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        const res1 = await fetch(proxy1);
-        if (!res1.ok) throw new Error('Proxy 1 failed');
-        html = await res1.text();
-      } catch (e) {
-        // Tentativo 2: allorigins.win (restituisce JSON)
-        const proxy2 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const res2 = await fetch(proxy2);
-        if (!res2.ok) throw new Error('Proxy 2 failed');
-        const data = await res2.json();
-        html = data.contents;
-      }
-      
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-
-      const getMeta = (property, name) => {
-        const el = doc.querySelector(`meta[property="${property}"]`) || doc.querySelector(`meta[name="${name}"]`);
-        return el ? el.getAttribute('content') : '';
-      };
-
-      let rawTitle = getMeta('og:title') || (doc.querySelector('title') ? doc.querySelector('title').textContent : '') || '';
-      const image_url = getMeta('og:image') || '';
-      let priceString = getMeta('product:price:amount') || getMeta('price', 'price') || '';
-      let vendor = getMeta('og:site_name') || '';
-
-      if (!priceString) {
-        const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
-        scripts.forEach(el => {
-          try {
-            const parsed = JSON.parse(el.textContent);
-            const searchData = Array.isArray(parsed) ? parsed : [parsed];
-            for (const item of searchData) {
-              if (item['@type'] === 'Product' && item.offers) {
-                if (item.offers.price) {
-                  priceString = item.offers.price.toString();
-                } else if (Array.isArray(item.offers) && item.offers[0]?.price) {
-                  priceString = item.offers[0].price.toString();
-                }
-                if (priceString) return;
-              }
-            }
-          } catch (e) {}
-        });
-      }
-
-      if (url.includes('ikea.com')) {
-        vendor = 'IKEA';
-        if (!priceString) {
-          const priceEl = doc.querySelector('.pip-temp-price__integer');
-          if (priceEl) priceString = priceEl.textContent;
-        }
-      } else if (url.includes('poltronesofa.com')) {
-        vendor = 'Poltronesofà';
-        if (!priceString) {
-          const priceEl = doc.querySelector('.price');
-          if (priceEl) priceString = priceEl.textContent;
-        }
-      }
-
-      let price = null;
-      if (priceString) {
-        const numericString = priceString.replace(/[^0-9.,]/g, '').replace(',', '.');
-        const parsedPrice = parseFloat(numericString);
-        if (!isNaN(parsedPrice)) {
-          price = parsedPrice;
-        }
-      }
-
-      let dimensions = '';
-      const dimMatch = rawTitle.match(/(\d+)\s*[xX]\s*(\d+)/);
-      if (dimMatch) {
-        dimensions = `${dimMatch[1]}x${dimMatch[2]}`;
-      } else {
-        const desc = getMeta('og:description') || '';
-        const descMatch = desc.match(/(\d+)\s*[xX]\s*(\d+)/);
-        if (descMatch) {
-          dimensions = `${descMatch[1]}x${descMatch[2]}`;
-        }
-      }
-
-      let title = rawTitle;
-      if (title.includes('- IKEA')) title = title.split('- IKEA')[0].trim();
-      if (title.includes(',')) title = title.split(',')[0].trim();
-
-      const lowerTitle = title.toLowerCase();
-      let category = '';
-      if (lowerTitle.includes('divano')) category = 'Divano';
-      else if (lowerTitle.includes('letto')) category = 'Letto';
-      else if (lowerTitle.includes('tavolo')) category = 'Tavolo';
-      else if (lowerTitle.includes('sedia')) category = 'Sedia';
-      else if (lowerTitle.includes('armadio')) category = 'Armadio';
-      else if (lowerTitle.includes('comodino')) category = 'Comodino';
-      else if (lowerTitle.includes('lampada')) category = 'Lampada';
-      else if (lowerTitle.includes('tappeto')) category = 'Tappeto';
-
-      let room = '';
-      if (category === 'Divano' || category === 'Tappeto') room = 'Soggiorno';
-      else if (category === 'Letto' || category === 'Comodino' || category === 'Armadio') room = 'Camera da letto';
-
-      setItemData({
-        title: title.trim() || rawTitle,
-        image_url: image_url.trim(),
-        price,
-        vendor: vendor.trim(),
-        category,
-        room,
-        dimensions,
-        url,
-        status: 'Da valutare'
+      const res = await fetch('/api/scrape', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
       });
-      
+      if (!res.ok) throw new Error(`Scrape error: ${res.status}`);
+      const scraped = await res.json();
+      if (scraped.error) throw new Error(scraped.error);
+      setItemData({ ...scraped, url, status: 'Da valutare' });
     } catch (err) {
       console.error('Scraping error:', err);
-      // Fallback: se lo scraping fallisce, mostriamo comunque il modulo vuoto
+      // Fallback: mostra il modulo vuoto per inserimento manuale
       setItemData({ url, status: 'Da valutare' });
     } finally {
       setLoading(false);
