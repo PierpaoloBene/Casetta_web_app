@@ -1,11 +1,11 @@
 # 🏡 Casetta
 
-Benvenuti nel progetto **Casetta**! ❤️
+Benvenuti nel progetto **Casetta**! 
 Questo sito è stato creato appositamente per me e la mia ragazza per aiutarci nella gestione quotidiana della nostra convivenza. È uno spazio condiviso in cui organizzare link, risorse e informazioni utili per la nostra casa.
 
 ---
 
-## 🛠️ Per chi volesse scaricarlo e utilizzarlo (Deploy personalizzato)
+##  Per chi volesse scaricarlo e utilizzarlo 
 
 Se trovi utile questo progetto e vuoi crearne una copia per la tua convivenza, puoi scaricarlo ed effettuare il deploy per conto tuo. Segui questi semplici passaggi:
 
