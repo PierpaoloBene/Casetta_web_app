@@ -11,13 +11,21 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
     if (!url) return;
     setLoading(true);
     try {
-      // Uso un proxy CORS gratuito (allorigins) poiché GitHub Pages è statico e non supporta le API in Node.js
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error('Proxy fetch failed');
-      
-      const data = await res.json();
-      const html = data.contents;
+      // Tentativo 1: corsproxy.io (restituisce HTML diretto, spesso funziona meglio su Safari)
+      let html = '';
+      try {
+        const proxy1 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const res1 = await fetch(proxy1);
+        if (!res1.ok) throw new Error('Proxy 1 failed');
+        html = await res1.text();
+      } catch (e) {
+        // Tentativo 2: allorigins.win (restituisce JSON)
+        const proxy2 = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const res2 = await fetch(proxy2);
+        if (!res2.ok) throw new Error('Proxy 2 failed');
+        const data = await res2.json();
+        html = data.contents;
+      }
       
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
