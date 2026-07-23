@@ -175,8 +175,18 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {itemData.image_url && (
-              <img src={itemData.image_url} alt="Preview" style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }} />
+            {itemData.image_url ? (
+              <div style={{ position: 'relative' }}>
+                <img src={itemData.image_url} alt="Preview" style={{ width: '100%', height: '160px', objectFit: 'cover', borderRadius: 'var(--radius-sm)' }} />
+                <button type="button" onClick={() => setItemData(prev => ({ ...prev, image_url: '' }))} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', color: 'white', borderRadius: '50%', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <label>Link Immagine (Opzionale)</label>
+                <input name="image_url" placeholder="https://..." className="glass-input" value={itemData.image_url || ''} onChange={handleChange} />
+              </div>
             )}
             
             <div className="flex flex-col gap-2">
