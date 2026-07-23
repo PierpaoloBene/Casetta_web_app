@@ -11,20 +11,117 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
     if (!url) return;
     setLoading(true);
     try {
-      const res = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItemData({ ...data, url, status: 'Da valutare' });
-      } else {
-        alert('Errore nello scraping del link.');
+      // Uso un proxy CORS gratuito (allorigins) poiché GitHub Pages è statico e non supporta le API in Node.js
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('Proxy fetch failed');
+      
+      const data = await res.json();
+      const html = data.contents;
+      
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+
+      const getMeta = (property, name) => {
+        const el = doc.querySelector(`meta[property="${property}"]`) || doc.querySelector(`meta[name="${name}"]`);
+        return el ? el.getAttribute('content') : '';
+      };
+
+      let rawTitle = getMeta('og:title') || (doc.querySelector('title') ? doc.querySelector('title').textContent : '') || '';
+      const image_url = getMeta('og:image') || '';
+      let priceString = getMeta('product:price:amount') || getMeta('price', 'price') || '';
+      let vendor = getMeta('og:site_name') || '';
+
+      if (!priceString) {
+        const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+        scripts.forEach(el => {
+          try {
+            const parsed = JSON.parse(el.textContent);
+            const searchData = Array.isArray(parsed) ? parsed : [parsed];
+            for (const item of searchData) {
+              if (item['@type'] === 'Product' && item.offers) {
+                if (item.offers.price) {
+                  priceString = item.offers.price.toString();
+                } else if (Array.isArray(item.offers) && item.offers[0]?.price) {
+                  priceString = item.offers[0].price.toString();
+                }
+                if (priceString) return;
+              }
+            }
+          } catch (e) {}
+        });
       }
+
+      if (url.includes('ikea.com')) {
+        vendor = 'IKEA';
+        if (!priceString) {
+          const priceEl = doc.querySelector('.pip-temp-price__integer');
+          if (priceEl) priceString = priceEl.textContent;
+        }
+      } else if (url.includes('poltronesofa.com')) {
+        vendor = 'Poltronesofà';
+        if (!priceString) {
+          const priceEl = doc.querySelector('.price');
+          if (priceEl) priceString = priceEl.textContent;
+        }
+      }
+
+      let price = null;
+      if (priceString) {
+        const numericString = priceString.replace(/[^0-9.,]/g, '').replace(',', '.');
+        const parsedPrice = parseFloat(numericString);
+        if (!isNaN(parsedPrice)) {
+          price = parsedPrice;
+        }
+      }
+
+      let dimensions = '';
+      const dimMatch = rawTitle.match(/(\d+)\s*[xX]\s*(\d+)/);
+      if (dimMatch) {
+        dimensions = `${dimMatch[1]}x${dimMatch[2]}`;
+      } else {
+        const desc = getMeta('og:description') || '';
+        const descMatch = desc.match(/(\d+)\s*[xX]\s*(\d+)/);
+        if (descMatch) {
+          dimensions = `${descMatch[1]}x${descMatch[2]}`;
+        }
+      }
+
+      let title = rawTitle;
+      if (title.includes('- IKEA')) title = title.split('- IKEA')[0].trim();
+      if (title.includes(',')) title = title.split(',')[0].trim();
+
+      const lowerTitle = title.toLowerCase();
+      let category = '';
+      if (lowerTitle.includes('divano')) category = 'Divano';
+      else if (lowerTitle.includes('letto')) category = 'Letto';
+      else if (lowerTitle.includes('tavolo')) category = 'Tavolo';
+      else if (lowerTitle.includes('sedia')) category = 'Sedia';
+      else if (lowerTitle.includes('armadio')) category = 'Armadio';
+      else if (lowerTitle.includes('comodino')) category = 'Comodino';
+      else if (lowerTitle.includes('lampada')) category = 'Lampada';
+      else if (lowerTitle.includes('tappeto')) category = 'Tappeto';
+
+      let room = '';
+      if (category === 'Divano' || category === 'Tappeto') room = 'Soggiorno';
+      else if (category === 'Letto' || category === 'Comodino' || category === 'Armadio') room = 'Camera da letto';
+
+      setItemData({
+        title: title.trim() || rawTitle,
+        image_url: image_url.trim(),
+        price,
+        vendor: vendor.trim(),
+        category,
+        room,
+        dimensions,
+        url,
+        status: 'Da valutare'
+      });
+      
     } catch (err) {
-      console.error(err);
-      alert('Errore nello scraping del link.');
+      console.error('Scraping error:', err);
+      // Fallback: se lo scraping fallisce, mostriamo comunque il modulo vuoto
+      setItemData({ url, status: 'Da valutare' });
     } finally {
       setLoading(false);
     }
