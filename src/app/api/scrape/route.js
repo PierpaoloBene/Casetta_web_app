@@ -1,6 +1,18 @@
 import * as cheerio from 'cheerio';
 import { NextResponse } from 'next/server';
 
+// Fetch via Microlink (headless browser, bypasses bot-detection)
+async function fetchViaMicrolink(url) {
+  const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(url)}&screenshot=false&meta=true`;
+  const res = await fetch(microlinkUrl, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (data.status !== 'success') return null;
+  return data.data; // { title, description, image: { url }, publisher, ... }
+}
+
 export async function POST(req) {
   try {
     const { url } = await req.json();
@@ -9,26 +21,58 @@ export async function POST(req) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    });
-
-    if (!response.ok) {
-      return NextResponse.json({ error: 'Failed to fetch the URL' }, { status: response.status });
+    // --- Attempt 1: direct fetch + cheerio ---
+    let html = null;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+        },
+      });
+      if (response.ok) {
+        html = await response.text();
+      }
+    } catch (_) {
+      html = null;
     }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    let rawTitle = '';
+    let image_url = '';
+    let priceString = '';
+    let vendor = '';
 
-    let rawTitle = $('meta[property="og:title"]').attr('content') || $('title').text() || '';
-    const image_url = $('meta[property="og:image"]').attr('content') || '';
-    let priceString = $('meta[property="product:price:amount"]').attr('content') || $('meta[name="price"]').attr('content') || '';
-    let vendor = $('meta[property="og:site_name"]').attr('content') || '';
+    if (html) {
+      const $ = cheerio.load(html);
+      rawTitle = $('meta[property="og:title"]').attr('content') || $('title').text() || '';
+      image_url = $('meta[property="og:image"]').attr('content') || '';
+      priceString = $('meta[property="product:price:amount"]').attr('content') || $('meta[name="price"]').attr('content') || '';
+      vendor = $('meta[property="og:site_name"]').attr('content') || '';
+    }
+
+    // --- Attempt 2: Microlink fallback (if direct fetch failed or image is missing) ---
+    if (!html || !image_url) {
+      try {
+        const mlData = await fetchViaMicrolink(url);
+        if (mlData) {
+          if (!rawTitle && mlData.title) rawTitle = mlData.title;
+          if (!image_url && mlData.image?.url) image_url = mlData.image.url;
+          if (!vendor && mlData.publisher) vendor = mlData.publisher;
+          // Microlink sometimes returns price in description or title
+        }
+      } catch (_) {}
+    }
+
+    // If still no data at all, return an error
+    if (!rawTitle && !image_url) {
+      return NextResponse.json({ error: 'Failed to fetch the URL' }, { status: 422 });
+    }
+
+    let $ = html ? cheerio.load(html) : null;
 
     // Advanced search for JSON-LD (Standard for E-commerce)
-    if (!priceString) {
+    if (!priceString && $) {
       $('script[type="application/ld+json"]').each((i, el) => {
         try {
           const data = JSON.parse($(el).html());
@@ -49,10 +93,10 @@ export async function POST(req) {
 
     if (url.includes('ikea.com')) {
       vendor = 'IKEA';
-      if (!priceString) priceString = $('.pip-temp-price__integer').first().text();
+      if (!priceString && $) priceString = $('.pip-temp-price__integer').first().text();
     } else if (url.includes('poltronesofa.com')) {
       vendor = 'Poltronesofà';
-      if (!priceString) priceString = $('.price').first().text();
+      if (!priceString && $) priceString = $('.price').first().text();
     }
 
     let price = null;
@@ -69,7 +113,7 @@ export async function POST(req) {
     const dimMatch = rawTitle.match(/(\d+)\s*[xX]\s*(\d+)/);
     if (dimMatch) {
       dimensions = `${dimMatch[1]}x${dimMatch[2]}`;
-    } else {
+    } else if ($) {
       // Also check description for dimensions
       const desc = $('meta[property="og:description"]').attr('content') || '';
       const descMatch = desc.match(/(\d+)\s*[xX]\s*(\d+)/);
