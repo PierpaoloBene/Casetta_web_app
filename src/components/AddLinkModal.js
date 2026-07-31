@@ -1,16 +1,26 @@
 "use client"
 import { useState } from 'react';
-import { X, Loader2, ImageOff, Image } from 'lucide-react';
+import { X, ImageOff, Image } from 'lucide-react';
+
+function getHostname(rawUrl) {
+  try {
+    return new URL(rawUrl).hostname.replace(/^www\./, '');
+  } catch {
+    return rawUrl;
+  }
+}
 
 export default function AddLinkModal({ onClose, onSave, editingItem, existingCategories = [] }) {
   const [url, setUrl] = useState(editingItem?.url || '');
   const [loading, setLoading] = useState(false);
+  const [loadingHost, setLoadingHost] = useState('');
   const [itemData, setItemData] = useState(editingItem || null);
   const [scrapedWithNoImage, setScrapedWithNoImage] = useState(false);
 
   const handleScrape = async () => {
     if (!url) return;
     setLoading(true);
+    setLoadingHost(getHostname(url));
     setScrapedWithNoImage(false);
     try {
       const res = await fetch('/api/scrape', {
@@ -68,10 +78,67 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
               placeholder="https://..."
               value={url}
               onChange={e => setUrl(e.target.value)}
+              disabled={loading}
             />
-            <button className="glass-button primary" onClick={handleScrape} disabled={loading || !url}>
-              {loading ? <Loader2 className="animate-spin" size={20} style={{ margin: '0 auto' }} /> : 'Avanti'}
-            </button>
+
+            {loading ? (
+              <div style={{
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.12)',
+                padding: '16px 18px',
+                overflow: 'hidden',
+                position: 'relative',
+              }}>
+                {/* Looping progress bar */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                  background: 'linear-gradient(90deg, transparent 0%, var(--color-accent, #7c6af7) 50%, transparent 100%)',
+                  animation: 'scrape-progress 1.6s ease-in-out infinite',
+                }} />
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  {/* Pulsing dot */}
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: 'var(--color-accent, #7c6af7)',
+                    flexShrink: 0,
+                    animation: 'scrape-pulse 1.2s ease-in-out infinite',
+                  }} />
+                  <span style={{ fontSize: '0.9rem', color: 'var(--color-text-light)' }}>
+                    Recupero info da{' '}
+                    <strong style={{ color: 'var(--color-text)' }}>{loadingHost}</strong>
+                    <span style={{ display: 'inline-flex', gap: '2px', marginLeft: '1px' }}>
+                      {[0, 1, 2].map(i => (
+                        <span key={i} style={{
+                          animation: `scrape-dot 1.2s ease-in-out ${i * 0.2}s infinite`,
+                          display: 'inline-block',
+                        }}>.</span>
+                      ))}
+                    </span>
+                  </span>
+                </div>
+
+                <style>{`
+                  @keyframes scrape-progress {
+                    0%   { transform: translateX(-100%); }
+                    100% { transform: translateX(200%); }
+                  }
+                  @keyframes scrape-pulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50%       { opacity: 0.4; transform: scale(0.75); }
+                  }
+                  @keyframes scrape-dot {
+                    0%, 80%, 100% { opacity: 0; transform: translateY(0); }
+                    40%           { opacity: 1; transform: translateY(-3px); }
+                  }
+                `}</style>
+              </div>
+            ) : (
+              <button className="glass-button primary" onClick={handleScrape} disabled={!url}>
+                Avanti
+              </button>
+            )}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
