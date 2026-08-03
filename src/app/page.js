@@ -14,6 +14,7 @@ export default function Home() {
   const [editingItem, setEditingItem] = useState(null);
   const [filterRoom, setFilterRoom] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+  const [filterAddedBy, setFilterAddedBy] = useState('');
 
   useEffect(() => {
     // Check if we should show animation
@@ -80,16 +81,27 @@ export default function Home() {
     }
   };
 
+  const handleToggleApproval = async (id, person, isApproved) => {
+    try {
+      const field = person === 'anna_rita' ? 'approved_by_anna_rita' : 'approved_by_pierpaolo';
+      const { error } = await supabase.from('furniture_items').update({ [field]: isApproved }).eq('id', id);
+      if (error) throw error;
+      setItems(items.map(item => item.id === id ? { ...item, [field]: isApproved } : item));
+    } catch (err) {
+      console.error("Error toggling approval:", err);
+    }
+  };
+
   const filteredItems = items.filter(item => {
     if (filterRoom && item.room !== filterRoom) return false;
     if (filterCategory && item.category !== filterCategory) return false;
+    if (filterAddedBy && item.added_by !== filterAddedBy) return false;
     return true;
   });
   
   const existingCategories = [...new Set(items.map(i => i.category).filter(Boolean))];
   
   const totalBudget = filteredItems.reduce((acc, curr) => acc + (curr.price || 0), 0);
-  const spentBudget = filteredItems.filter(i => i.status === 'Comprato').reduce((acc, curr) => acc + (curr.price || 0), 0);
 
   return (
     <main>
@@ -116,6 +128,12 @@ export default function Home() {
                   <option key={idx} value={cat}>{cat}</option>
                 ))}
               </select>
+
+              <select className="glass-input" value={filterAddedBy} onChange={e => setFilterAddedBy(e.target.value)}>
+                <option value="">Tutti (Inserito da)</option>
+                <option value="Anna Rita">Anna Rita</option>
+                <option value="Pierpaolo">Pierpaolo</option>
+              </select>
               
               <button className="glass-button primary flex items-center gap-2" onClick={() => { setEditingItem(null); setIsModalOpen(true); }}>
                 <Plus size={20} /> Aggiungi
@@ -123,14 +141,10 @@ export default function Home() {
             </div>
           </header>
 
-          <div className="glass budget-box">
+          <div className="glass budget-box" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
-              <p style={{ color: 'var(--color-text-light)', margin: 0, fontSize: '0.9rem' }}>Spesa Totale</p>
+              <p style={{ color: 'var(--color-text-light)', margin: 0, fontSize: '0.9rem' }}>Spesa Totale (Elementi filtrati)</p>
               <h2 style={{ margin: 0, fontSize: '1.8rem' }}>€{totalBudget.toFixed(2)}</h2>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <p style={{ color: 'var(--color-text-light)', margin: 0, fontSize: '0.9rem' }}>Speso</p>
-              <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#8B9A8B' }}>€{spentBudget.toFixed(2)}</h2>
             </div>
           </div>
 
@@ -151,6 +165,7 @@ export default function Home() {
                   item={item} 
                   onDelete={handleDeleteItem} 
                   onEdit={(item) => { setEditingItem(item); setIsModalOpen(true); }}
+                  onToggleApproval={handleToggleApproval}
                 />
               ))}
             </div>

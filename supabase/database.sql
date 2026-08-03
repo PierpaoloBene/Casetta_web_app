@@ -8,10 +8,12 @@ CREATE TABLE furniture_items (
     price NUMERIC,
     category TEXT,
     room TEXT,
-    status TEXT DEFAULT 'Da valutare',
     notes TEXT,
     image_url TEXT,
-    vendor TEXT
+    vendor TEXT,
+    added_by TEXT,
+    approved_by_anna_rita BOOLEAN DEFAULT FALSE,
+    approved_by_pierpaolo BOOLEAN DEFAULT FALSE
 );
 
 -- RLS policies

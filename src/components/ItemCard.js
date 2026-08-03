@@ -1,19 +1,12 @@
 "use client"
 import { ExternalLink, Edit2, Trash2 } from 'lucide-react';
 
-export default function ItemCard({ item, onDelete, onEdit }) {
+export default function ItemCard({ item, onDelete, onEdit, onToggleApproval }) {
   const formatPrice = (price) => {
     return price ? `€${parseFloat(price).toFixed(2)}` : 'Prezzo n.d.';
   };
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'Da valutare': return 'badge-da-valutare';
-      case 'Scelto': return 'badge-scelto';
-      case 'Comprato': return 'badge-comprato';
-      default: return 'badge-da-valutare';
-    }
-  };
+
 
   return (
     <div className="glass flex flex-col" style={{ overflow: 'hidden' }}>
@@ -25,9 +18,7 @@ export default function ItemCard({ item, onDelete, onEdit }) {
             Nessuna immagine
           </div>
         )}
-        <div style={{ position: 'absolute', top: 12, right: 12 }}>
-          <span className={`badge ${getStatusClass(item.status)}`}>{item.status}</span>
-        </div>
+
       </div>
       
       <div className="flex flex-col gap-2" style={{ padding: '16px', flex: 1 }}>
@@ -62,6 +53,34 @@ export default function ItemCard({ item, onDelete, onEdit }) {
             {item.notes}
           </div>
         )}
+        
+        <div style={{ marginTop: '12px', borderTop: '1px solid var(--color-glass-border)', paddingTop: '12px' }}>
+          {item.added_by && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginBottom: '8px' }}>
+              Inserito da: <strong style={{ color: 'var(--color-text)' }}>{item.added_by}</strong>
+            </div>
+          )}
+          <div className="flex justify-between items-center" style={{ fontSize: '0.9rem' }}>
+            <label className="flex items-center gap-2 cursor-pointer" style={{ opacity: item.approved_by_anna_rita ? 1 : 0.6 }}>
+              <input 
+                type="checkbox" 
+                checked={!!item.approved_by_anna_rita}
+                onChange={() => onToggleApproval(item.id, 'anna_rita', !item.approved_by_anna_rita)}
+                style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
+              />
+              Anna Rita
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer" style={{ opacity: item.approved_by_pierpaolo ? 1 : 0.6 }}>
+              <input 
+                type="checkbox" 
+                checked={!!item.approved_by_pierpaolo}
+                onChange={() => onToggleApproval(item.id, 'pierpaolo', !item.approved_by_pierpaolo)}
+                style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
+              />
+              Pierpaolo
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   );

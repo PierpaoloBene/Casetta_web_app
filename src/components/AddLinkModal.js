@@ -31,12 +31,12 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
       if (!res.ok) throw new Error(`Scrape error: ${res.status}`);
       const scraped = await res.json();
       if (scraped.error) throw new Error(scraped.error);
-      const data = { ...scraped, url, status: 'Da valutare' };
+      const data = { ...scraped, url };
       setItemData(data);
       if (!scraped.image_url) setScrapedWithNoImage(true);
     } catch (err) {
       console.error('Scraping error:', err);
-      setItemData({ url, status: 'Da valutare' });
+      setItemData({ url });
       setScrapedWithNoImage(true);
     } finally {
       setLoading(false);
@@ -46,7 +46,17 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
   const handleSubmit = (e) => {
     e.preventDefault();
     if (itemData) {
-      onSave(itemData);
+      const finalData = { ...itemData };
+      // Remove status if it exists
+      if (finalData.status !== undefined) delete finalData.status;
+      
+      // Set initial approval if it's a new item
+      if (!editingItem && finalData.added_by) {
+        if (finalData.added_by === 'Anna Rita') finalData.approved_by_anna_rita = true;
+        if (finalData.added_by === 'Pierpaolo') finalData.approved_by_pierpaolo = true;
+      }
+      
+      onSave(finalData);
     }
   };
 
@@ -266,11 +276,11 @@ export default function AddLinkModal({ onClose, onSave, editingItem, existingCat
                 </select>
               </div>
               <div className="flex flex-col gap-2" style={{ flex: 1 }}>
-                <label>Stato</label>
-                <select name="status" className="glass-input" value={itemData?.status || 'Da valutare'} onChange={handleChange}>
-                  <option value="Da valutare">Da valutare</option>
-                  <option value="Scelto">Scelto</option>
-                  <option value="Comprato">Comprato</option>
+                <label>Inserito da</label>
+                <select name="added_by" className="glass-input" required value={itemData?.added_by || ''} onChange={handleChange}>
+                  <option value="">Seleziona...</option>
+                  <option value="Anna Rita">Anna Rita</option>
+                  <option value="Pierpaolo">Pierpaolo</option>
                 </select>
               </div>
             </div>
