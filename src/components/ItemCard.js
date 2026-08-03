@@ -1,5 +1,6 @@
 "use client"
-import { ExternalLink, Edit2, Trash2 } from 'lucide-react';
+import { ExternalLink, Edit2, Trash2, Heart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ItemCard({ item, onDelete, onEdit, onToggleApproval }) {
   const formatPrice = (price) => {
@@ -18,8 +19,18 @@ export default function ItemCard({ item, onDelete, onEdit, onToggleApproval }) {
             Nessuna immagine
           </div>
         )}
-
-      </div>
+        
+        {item.added_by && (
+          <div style={{ 
+            position: 'absolute', top: 12, right: 12, 
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)',
+            padding: '4px 12px', borderRadius: '16px', fontSize: '0.75rem',
+            color: '#fff', fontWeight: '600', border: '1px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          }}>
+            {item.added_by}
+          </div>
+        )}      </div>
       
       <div className="flex flex-col gap-2" style={{ padding: '16px', flex: 1 }}>
         <div className="flex justify-between items-start gap-2">
@@ -54,32 +65,125 @@ export default function ItemCard({ item, onDelete, onEdit, onToggleApproval }) {
           </div>
         )}
         
-        <div style={{ marginTop: '12px', borderTop: '1px solid var(--color-glass-border)', paddingTop: '12px' }}>
-          {item.added_by && (
-            <div style={{ fontSize: '0.8rem', color: 'var(--color-text-light)', marginBottom: '8px' }}>
-              Inserito da: <strong style={{ color: 'var(--color-text)' }}>{item.added_by}</strong>
-            </div>
-          )}
-          <div className="flex justify-between items-center" style={{ fontSize: '0.9rem' }}>
-            <label className="flex items-center gap-2 cursor-pointer" style={{ opacity: item.approved_by_anna_rita ? 1 : 0.6 }}>
-              <input 
-                type="checkbox" 
-                checked={!!item.approved_by_anna_rita}
-                onChange={() => onToggleApproval(item.id, 'anna_rita', !item.approved_by_anna_rita)}
-                style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
-              />
+        <div style={{ marginTop: '12px', borderTop: '1px solid var(--color-glass-border)', paddingTop: '16px', paddingBottom: '4px' }}>
+          <motion.div 
+            layout
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: (item.approved_by_anna_rita && item.approved_by_pierpaolo) ? '12px' : '24px' 
+            }}
+          >
+            <motion.button
+              layout
+              onClick={() => onToggleApproval(item.id, 'anna_rita', !item.approved_by_anna_rita)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                border: '1px solid',
+                borderColor: item.approved_by_anna_rita ? '#e91e63' : 'var(--color-glass-border)',
+                background: item.approved_by_anna_rita ? 'linear-gradient(135deg, #f48fb1, #e91e63)' : 'rgba(255,255,255,0.05)',
+                color: item.approved_by_anna_rita ? '#fff' : 'var(--color-text-light)',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                boxShadow: item.approved_by_anna_rita ? '0 4px 12px rgba(233, 30, 99, 0.3)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                zIndex: 2
+              }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
               Anna Rita
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer" style={{ opacity: item.approved_by_pierpaolo ? 1 : 0.6 }}>
-              <input 
-                type="checkbox" 
-                checked={!!item.approved_by_pierpaolo}
-                onChange={() => onToggleApproval(item.id, 'pierpaolo', !item.approved_by_pierpaolo)}
-                style={{ accentColor: 'var(--color-primary)', width: '16px', height: '16px' }}
-              />
+            </motion.button>
+            
+            <AnimatePresence>
+              {(item.approved_by_anna_rita && item.approved_by_pierpaolo) && (
+                <motion.div
+                  initial={{ scale: 0, rotate: -15 }}
+                  animate={{ 
+                    scale: [0, 1.2, 1], 
+                    rotate: 0,
+                    filter: ['hue-rotate(0deg)', 'hue-rotate(360deg)'] 
+                  }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ 
+                    duration: 0.5, 
+                    type: 'spring', 
+                    bounce: 0.6,
+                    filter: { repeat: Infinity, duration: 4, ease: "linear" }
+                  }}
+                  style={{ zIndex: 1 }}
+                >
+                  <motion.div
+                    animate={{ scale: [1, 1.15, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
+                  >
+                    <Heart size={24} fill="#e91e63" color="#e91e63" style={{ filter: 'drop-shadow(0 0 8px rgba(233,30,99,0.5))' }} />
+                  </motion.div>
+                  
+                  {/* Coriandoli */}
+                  {[...Array(12)].map((_, i) => {
+                    const angle = (i * 30) * (Math.PI / 180);
+                    const distance = 30 + (i % 3) * 15;
+                    const targetX = Math.cos(angle) * distance;
+                    const targetY = Math.sin(angle) * distance;
+                    const colors = ['#e91e63', '#3b82f6', '#facc15', '#10b981', '#a855f7'];
+                    
+                    return (
+                      <motion.div
+                        key={`confetti-${i}`}
+                        initial={{ scale: 0, x: 0, y: 0, opacity: 1 }}
+                        animate={{ 
+                          scale: [0, 1, 0], 
+                          x: targetX, 
+                          y: targetY - 10,
+                          rotate: i * 45 + 180,
+                          opacity: [1, 1, 0]
+                        }}
+                        transition={{ duration: 0.9, ease: "easeOut" }}
+                        style={{
+                          position: 'absolute',
+                          top: '10px',
+                          left: '10px',
+                          width: '6px',
+                          height: '6px',
+                          backgroundColor: colors[i % colors.length],
+                          borderRadius: i % 2 === 0 ? '50%' : '1px',
+                          zIndex: 0,
+                          pointerEvents: 'none'
+                        }}
+                      />
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <motion.button
+              layout
+              onClick={() => onToggleApproval(item.id, 'pierpaolo', !item.approved_by_pierpaolo)}
+              style={{
+                padding: '6px 14px',
+                borderRadius: '20px',
+                border: '1px solid',
+                borderColor: item.approved_by_pierpaolo ? '#3b82f6' : 'var(--color-glass-border)',
+                background: item.approved_by_pierpaolo ? 'linear-gradient(135deg, #93c5fd, #3b82f6)' : 'rgba(255,255,255,0.05)',
+                color: item.approved_by_pierpaolo ? '#fff' : 'var(--color-text-light)',
+                fontWeight: 'bold',
+                fontSize: '0.85rem',
+                boxShadow: item.approved_by_pierpaolo ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                zIndex: 2
+              }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
               Pierpaolo
-            </label>
-          </div>
+            </motion.button>
+          </motion.div>
         </div>
       </div>
     </div>
